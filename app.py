@@ -15,7 +15,7 @@ from data.stock_data import stock_fetcher
 from analysis.technical_analysis import technical_analyzer
 from analysis.fundamental_analysis import fundamental_analyzer
 from analysis.sentiment_analysis import sentiment_analyzer
-from ml.rl_model import rl_trading_system
+from ml.simple_rl_model import simple_rl_system
 from config.settings import POPULAR_STOCKS
 from utils.helpers import format_currency, calculate_portfolio_metrics
 
@@ -423,10 +423,17 @@ def display_technical_analysis(stock_data, symbol):
         # Recent signals
         recent_signals = signals.tail(5)
         for date, row in recent_signals.iterrows():
-            if row['Buy_Signal']:
-                st.success(f"BUY signal on {date.strftime('%Y-%m-%d')}")
-            elif row['Sell_Signal']:
-                st.error(f"SELL signal on {date.strftime('%Y-%m-%d')}")
+            try:
+                if row['Buy_Signal']:
+                    st.success(f"BUY signal on {date.strftime('%Y-%m-%d')}")
+                elif row['Sell_Signal']:
+                    st.error(f"SELL signal on {date.strftime('%Y-%m-%d')}")
+            except:
+                # Handle any date formatting issues
+                if row['Buy_Signal']:
+                    st.success(f"BUY signal detected")
+                elif row['Sell_Signal']:
+                    st.error(f"SELL signal detected")
     
     # Technical charts
     create_technical_charts(stock_data, rsi, macd, ma, bb, stoch)
@@ -602,19 +609,15 @@ def display_rl_analysis(stock_data, symbol):
     st.subheader("🤖 Reinforcement Learning Analysis")
     
     # Check if model is trained
-    if not rl_trading_system.trained:
-        # Try to load existing model
-        if rl_trading_system.load_model():
-            st.success("✅ Pre-trained model loaded successfully!")
-        else:
-            st.warning("⚠️ No trained model found. Please train the model first.")
-            if st.button("Train Model Now"):
-                train_rl_model()
-            return
+    if not simple_rl_system.trained:
+        st.warning("⚠️ No trained model found. Please train the model first.")
+        if st.button("Train Model Now"):
+            train_rl_model()
+        return
     
     # Get RL prediction
     with st.spinner("Getting RL predictions..."):
-        action, confidence = rl_trading_system.predict_action(stock_data, symbol)
+        action, confidence = simple_rl_system.predict_action(stock_data, symbol)
     
     # Display prediction
     col1, col2 = st.columns(2)
@@ -643,7 +646,7 @@ def display_rl_analysis(stock_data, symbol):
     st.subheader("📈 Strategy Backtesting")
     
     with st.spinner("Running backtest..."):
-        backtest_results = rl_trading_system.backtest_strategy(stock_data, symbol)
+        backtest_results = simple_rl_system.backtest_strategy(stock_data, symbol)
     
     if backtest_results:
         # Performance metrics
@@ -753,7 +756,7 @@ def train_rl_model():
     # Train model
     try:
         with st.spinner("Training model..."):
-            episode_rewards = rl_trading_system.train_model(training_data, symbol, episodes=50)
+            episode_rewards = simple_rl_system.train_model(training_data, symbol, episodes=50)
         
         st.success("✅ Model trained successfully!")
         

@@ -170,7 +170,7 @@ class TechnicalAnalyzer:
         bb = self.calculate_bollinger_bands(data)
         stoch = self.calculate_stochastic(data)
         atr_series = self.calculate_atr(data)
-        atr = atr_series.iloc[-1] if not atr_series.empty else 0
+        atr = atr_series.iloc[-1] if hasattr(atr_series, 'iloc') and len(atr_series) > 0 else 0
         
         # Get latest values
         macd_current = macd['MACD'].iloc[-1] if not macd.empty else 0
