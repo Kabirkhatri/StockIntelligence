@@ -8,13 +8,12 @@ import streamlit as st
 from datetime import datetime, timedelta
 import requests
 from config.settings import NSE_SUFFIX, BSE_SUFFIX, POPULAR_STOCKS
-from utils.helpers import add_indian_suffix, get_cached_data
+from utils.helpers import add_indian_suffix
 
 class StockDataFetcher:
     def __init__(self):
         self.cache_duration = 300  # 5 minutes
     
-    @st.cache_data(ttl=300)
     def fetch_stock_data(self, symbol, period="1y", exchange="NSE"):
         """
         Fetch stock data from yfinance for Indian markets
@@ -49,7 +48,6 @@ class StockDataFetcher:
             st.error(f"Error fetching data for {symbol}: {str(e)}")
             return None
     
-    @st.cache_data(ttl=300)
     def fetch_stock_info(self, symbol, exchange="NSE"):
         """
         Fetch detailed stock information and fundamentals
@@ -94,7 +92,6 @@ class StockDataFetcher:
             st.error(f"Error fetching info for {symbol}: {str(e)}")
             return {}
     
-    @st.cache_data(ttl=1800)  # Cache for 30 minutes
     def fetch_multiple_stocks(self, symbols, period="1y", exchange="NSE"):
         """
         Fetch data for multiple stocks
@@ -114,7 +111,7 @@ class StockDataFetcher:
         
         for i, symbol in enumerate(symbols):
             status_text.text(f"Fetching data for {symbol}...")
-            data = self.fetch_stock_data(symbol, period, exchange)
+            data = _self.fetch_stock_data(symbol, period, exchange)
             if data is not None:
                 stock_data[symbol] = data
             
@@ -134,7 +131,7 @@ class StockDataFetcher:
         return POPULAR_STOCKS
     
     @st.cache_data(ttl=3600)  # Cache for 1 hour
-    def fetch_market_indices(self):
+    def fetch_market_indices(_self):
         """
         Fetch major Indian market indices
         """
