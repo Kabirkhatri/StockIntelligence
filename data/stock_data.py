@@ -111,7 +111,7 @@ class StockDataFetcher:
         
         for i, symbol in enumerate(symbols):
             status_text.text(f"Fetching data for {symbol}...")
-            data = _self.fetch_stock_data(symbol, period, exchange)
+            data = self.fetch_stock_data(symbol, period, exchange)
             if data is not None:
                 stock_data[symbol] = data
             
@@ -130,8 +130,7 @@ class StockDataFetcher:
         """
         return POPULAR_STOCKS
     
-    @st.cache_data(ttl=3600)  # Cache for 1 hour
-    def fetch_market_indices(_self):
+    def fetch_market_indices(self):
         """
         Fetch major Indian market indices
         """
