@@ -699,9 +699,21 @@ def display_rl_analysis(stock_data, symbol):
         # Portfolio value chart
         if 'portfolio_values' in backtest_results and backtest_results['portfolio_values']:
             portfolio_values = backtest_results['portfolio_values']
+            
+            # Ensure we have matching lengths for portfolio values and index
+            start_idx = 20  # Start after lookback window
+            available_data_length = len(stock_data) - start_idx
+            
+            # Trim portfolio values to match available data length
+            if len(portfolio_values) > available_data_length:
+                portfolio_values = portfolio_values[:available_data_length]
+            
+            # Create index that matches the portfolio values length
+            chart_index = stock_data.index[start_idx:start_idx+len(portfolio_values)]
+            
             portfolio_df = pd.DataFrame({
                 'Portfolio Value': portfolio_values
-            }, index=stock_data.index[20:20+len(portfolio_values)])  # Start after lookback window
+            }, index=chart_index)
             
             fig_portfolio = go.Figure()
             fig_portfolio.add_trace(go.Scatter(
@@ -712,7 +724,7 @@ def display_rl_analysis(stock_data, symbol):
             ))
             
             # Add benchmark
-            benchmark_data = stock_data['Close'][20:20+len(portfolio_values)]
+            benchmark_data = stock_data['Close'][start_idx:start_idx+len(portfolio_values)]
             if len(benchmark_data) > 0:
                 benchmark_portfolio = (benchmark_data / benchmark_data.iloc[0]) * INITIAL_CAPITAL  # Normalize to same starting value
                 
@@ -722,14 +734,16 @@ def display_rl_analysis(stock_data, symbol):
                     name='Buy & Hold',
                     line=dict(color='red', dash='dash')
                 ))
-        
-        fig_portfolio.update_layout(
-            title="Portfolio Performance Comparison",
-            yaxis_title="Portfolio Value (₹)",
-            height=400
-        )
-        
-        st.plotly_chart(fig_portfolio, use_container_width=True)
+            
+            fig_portfolio.update_layout(
+                title="Portfolio Performance Comparison",
+                yaxis_title="Portfolio Value (₹)",
+                height=400
+            )
+            
+            st.plotly_chart(fig_portfolio, use_container_width=True)
+        else:
+            st.warning("No portfolio data available for visualization")
         
         # Trading summary
         st.subheader("💼 Trading Summary")
