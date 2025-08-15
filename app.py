@@ -16,7 +16,7 @@ from analysis.technical_analysis import technical_analyzer
 from analysis.fundamental_analysis import fundamental_analyzer
 from analysis.sentiment_analysis import sentiment_analyzer
 from ml.simple_rl_model import simple_rl_system
-from config.settings import POPULAR_STOCKS
+from config.settings import POPULAR_STOCKS, INITIAL_CAPITAL
 from utils.helpers import format_currency, calculate_portfolio_metrics
 
 # Page configuration
@@ -663,7 +663,10 @@ def display_rl_analysis(stock_data, symbol):
             """, unsafe_allow_html=True)
         
         with col2:
-            benchmark_return = backtest_results['benchmark_return']
+            # Calculate benchmark return (buy and hold strategy)
+            start_price = stock_data['Close'].iloc[20]  # Start after lookback window
+            end_price = stock_data['Close'].iloc[-1]
+            benchmark_return = (end_price - start_price) / start_price
             bench_color = "positive" if benchmark_return > 0 else "negative"
             st.markdown(f"""
             <div class="metric-card">
@@ -673,7 +676,8 @@ def display_rl_analysis(stock_data, symbol):
             """, unsafe_allow_html=True)
         
         with col3:
-            excess_return = backtest_results['excess_return']
+            # Calculate excess return
+            excess_return = total_return - benchmark_return
             excess_color = "positive" if excess_return > 0 else "negative"
             st.markdown(f"""
             <div class="metric-card">
@@ -693,28 +697,31 @@ def display_rl_analysis(stock_data, symbol):
             """, unsafe_allow_html=True)
         
         # Portfolio value chart
-        portfolio_df = pd.DataFrame({
-            'Portfolio Value': backtest_results['portfolio_values']
-        }, index=stock_data.index[-len(backtest_results['portfolio_values']):])
-        
-        fig_portfolio = go.Figure()
-        fig_portfolio.add_trace(go.Scatter(
-            x=portfolio_df.index,
-            y=portfolio_df['Portfolio Value'],
-            name='RL Strategy',
-            line=dict(color='blue')
-        ))
-        
-        # Add benchmark
-        benchmark_data = stock_data['Close'][-len(backtest_results['portfolio_values']):]
-        benchmark_portfolio = (benchmark_data / benchmark_data.iloc[0]) * 100000  # Normalize to same starting value
-        
-        fig_portfolio.add_trace(go.Scatter(
-            x=benchmark_data.index,
-            y=benchmark_portfolio,
-            name='Buy & Hold',
-            line=dict(color='red', dash='dash')
-        ))
+        if 'portfolio_values' in backtest_results and backtest_results['portfolio_values']:
+            portfolio_values = backtest_results['portfolio_values']
+            portfolio_df = pd.DataFrame({
+                'Portfolio Value': portfolio_values
+            }, index=stock_data.index[20:20+len(portfolio_values)])  # Start after lookback window
+            
+            fig_portfolio = go.Figure()
+            fig_portfolio.add_trace(go.Scatter(
+                x=portfolio_df.index,
+                y=portfolio_df['Portfolio Value'],
+                name='RL Strategy',
+                line=dict(color='blue')
+            ))
+            
+            # Add benchmark
+            benchmark_data = stock_data['Close'][20:20+len(portfolio_values)]
+            if len(benchmark_data) > 0:
+                benchmark_portfolio = (benchmark_data / benchmark_data.iloc[0]) * INITIAL_CAPITAL  # Normalize to same starting value
+                
+                fig_portfolio.add_trace(go.Scatter(
+                    x=benchmark_data.index,
+                    y=benchmark_portfolio,
+                    name='Buy & Hold',
+                    line=dict(color='red', dash='dash')
+                ))
         
         fig_portfolio.update_layout(
             title="Portfolio Performance Comparison",
@@ -730,11 +737,12 @@ def display_rl_analysis(stock_data, symbol):
         col1, col2 = st.columns(2)
         
         with col1:
-            st.metric("Total Trades", backtest_results['total_trades'])
-            st.metric("Transaction Costs", format_currency(backtest_results['transaction_costs']))
-        
+            total_trades = len(backtest_results.get('actions', []))
+            st.metric("Total Trades", total_trades)
+            
         with col2:
-            st.metric("Max Drawdown", f"{backtest_results['max_drawdown']*100:.2f}%")
+            max_drawdown = backtest_results.get('max_drawdown', 0)
+            st.metric("Max Drawdown", f"{max_drawdown*100:.2f}%")
 
 def train_rl_model():
     """Train the RL model"""
