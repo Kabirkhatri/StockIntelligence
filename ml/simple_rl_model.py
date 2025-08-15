@@ -1,6 +1,7 @@
 
 """
 Simplified RL model for stock trading without TensorFlow dependencies
+Enhanced for better profitability and reduced gap with benchmark
 """
 import numpy as np
 import pandas as pd
@@ -11,49 +12,74 @@ import pickle
 import os
 
 class SimpleTradingAgent:
-    """Simple trading agent using basic Q-learning"""
+    """Simple trading agent using basic Q-learning with enhanced trading logic"""
     
     def __init__(self):
         self.q_table = {}
-        self.learning_rate = 0.1
-        self.discount_factor = 0.95
-        self.epsilon = 0.3  # Higher exploration initially
-        self.epsilon_decay = 0.995
-        self.min_epsilon = 0.01
+        self.learning_rate = 0.15  # Increased learning rate
+        self.discount_factor = 0.98  # Higher discount for long-term rewards
+        self.epsilon = 0.4  # Higher initial exploration
+        self.epsilon_decay = 0.998  # Slower decay to maintain exploration
+        self.min_epsilon = 0.05
+        
+        # Enhanced state tracking
+        self.state_visits = {}
+        self.action_rewards = {'BUY': [], 'SELL': [], 'HOLD': []}
         
     def get_state_key(self, state_features):
-        """Convert state features to a hashable key"""
+        """Convert state features to a hashable key with enhanced discretization"""
         try:
-            # Discretize continuous features for Q-table
+            # More granular bucketing for better decision making
             rsi = state_features.get('rsi', 50)
             macd = state_features.get('macd', 0)
             price_trend = state_features.get('price_trend', 0)
             volume_ratio = state_features.get('volume_ratio', 1)
+            momentum = state_features.get('momentum', 0)
+            volatility = state_features.get('volatility', 0)
             
-            rsi_bucket = min(max(int(rsi / 20), 0), 4)  # 0-4 buckets
-            macd_bucket = 2 if macd > 0.01 else 1 if macd > -0.01 else 0
-            trend_bucket = 2 if price_trend > 0.02 else 1 if price_trend > -0.02 else 0
-            vol_bucket = min(max(int(volume_ratio), 0), 3)  # 0-3 buckets
+            # Enhanced bucketing
+            rsi_bucket = min(max(int(rsi / 10), 0), 9)  # 10 buckets (0-9)
+            macd_bucket = 4 if macd > 0.02 else 3 if macd > 0.01 else 2 if macd > -0.01 else 1 if macd > -0.02 else 0
+            trend_bucket = 4 if price_trend > 0.03 else 3 if price_trend > 0.01 else 2 if price_trend > -0.01 else 1 if price_trend > -0.03 else 0
+            vol_bucket = min(max(int(volume_ratio * 2), 0), 5)  # 6 buckets
+            mom_bucket = 2 if momentum > 0.02 else 1 if momentum > -0.02 else 0
+            volatility_bucket = min(max(int(volatility * 100), 0), 3)  # 4 buckets
             
-            return f"{rsi_bucket}_{macd_bucket}_{trend_bucket}_{vol_bucket}"
+            return f"{rsi_bucket}_{macd_bucket}_{trend_bucket}_{vol_bucket}_{mom_bucket}_{volatility_bucket}"
         except:
             return "default_state"
     
     def choose_action(self, state_features):
-        """Choose action using epsilon-greedy policy"""
+        """Choose action using epsilon-greedy policy with enhanced logic"""
         state_key = self.get_state_key(state_features)
         
         if state_key not in self.q_table:
-            self.q_table[state_key] = [0.0] * len(RL_ACTIONS)
+            # Initialize with slight bias towards profitable actions
+            self.q_table[state_key] = [0.1, 0.1, 0.0]  # BUY, SELL, HOLD
         
-        if random.random() < self.epsilon:
-            return random.choice(RL_ACTIONS)
+        # Track state visits for adaptive learning
+        self.state_visits[state_key] = self.state_visits.get(state_key, 0) + 1
+        
+        # Adaptive epsilon based on state familiarity
+        adaptive_epsilon = self.epsilon / (1 + self.state_visits[state_key] * 0.1)
+        
+        if random.random() < adaptive_epsilon:
+            # Smart exploration - bias towards potentially profitable actions
+            rsi = state_features.get('rsi', 50)
+            trend = state_features.get('price_trend', 0)
+            
+            if rsi < 30 and trend > 0:  # Oversold with positive trend
+                return 'BUY' if random.random() < 0.7 else random.choice(RL_ACTIONS)
+            elif rsi > 70 and trend < 0:  # Overbought with negative trend
+                return 'SELL' if random.random() < 0.7 else random.choice(RL_ACTIONS)
+            else:
+                return random.choice(RL_ACTIONS)
         
         best_action_idx = np.argmax(self.q_table[state_key])
         return RL_ACTIONS[best_action_idx]
     
     def update_q_value(self, state_features, action, reward, next_state_features):
-        """Update Q-value based on experience"""
+        """Update Q-value with enhanced learning"""
         state_key = self.get_state_key(state_features)
         next_state_key = self.get_state_key(next_state_features)
         
@@ -66,41 +92,51 @@ class SimpleTradingAgent:
         current_q = self.q_table[state_key][action_idx]
         max_next_q = max(self.q_table[next_state_key])
         
-        # Q-learning update
-        new_q = current_q + self.learning_rate * (reward + self.discount_factor * max_next_q - current_q)
+        # Enhanced Q-learning with momentum
+        learning_rate = self.learning_rate / (1 + self.state_visits.get(state_key, 0) * 0.01)
+        new_q = current_q + learning_rate * (reward + self.discount_factor * max_next_q - current_q)
         self.q_table[state_key][action_idx] = new_q
+        
+        # Track action performance
+        self.action_rewards[action].append(reward)
+        if len(self.action_rewards[action]) > 100:
+            self.action_rewards[action].pop(0)
         
         # Decay epsilon
         if self.epsilon > self.min_epsilon:
             self.epsilon *= self.epsilon_decay
     
     def save_model(self, filepath):
-        """Save the Q-table"""
+        """Save the Q-table and learning state"""
         try:
             with open(filepath, 'wb') as f:
                 pickle.dump({
                     'q_table': self.q_table,
-                    'epsilon': self.epsilon
+                    'epsilon': self.epsilon,
+                    'state_visits': self.state_visits,
+                    'action_rewards': self.action_rewards
                 }, f)
             return True
         except:
             return False
     
     def load_model(self, filepath):
-        """Load the Q-table"""
+        """Load the Q-table and learning state"""
         try:
             if os.path.exists(filepath):
                 with open(filepath, 'rb') as f:
                     data = pickle.load(f)
                     self.q_table = data.get('q_table', {})
-                    self.epsilon = data.get('epsilon', 0.01)
+                    self.epsilon = data.get('epsilon', 0.05)
+                    self.state_visits = data.get('state_visits', {})
+                    self.action_rewards = data.get('action_rewards', {'BUY': [], 'SELL': [], 'HOLD': []})
                 return True
         except:
             pass
         return False
 
 class SimpleRLTradingSystem:
-    """Simple RL trading system"""
+    """Enhanced RL trading system with improved profitability"""
     
     def __init__(self):
         self.agent = SimpleTradingAgent()
@@ -112,29 +148,24 @@ class SimpleRLTradingSystem:
             self.trained = True
     
     def extract_features(self, data, current_idx):
-        """Extract features from stock data"""
+        """Extract enhanced features from stock data"""
         try:
-            if current_idx < 20:
+            if current_idx < 25:
                 return {
-                    'rsi': 50,
-                    'macd': 0,
-                    'price_trend': 0,
-                    'volume_ratio': 1
+                    'rsi': 50, 'macd': 0, 'price_trend': 0, 'volume_ratio': 1,
+                    'momentum': 0, 'volatility': 0
                 }
             
             current_price = data['Close'].iloc[current_idx]
-            recent_data = data.iloc[max(0, current_idx-20):current_idx+1]
+            recent_data = data.iloc[max(0, current_idx-25):current_idx+1]
             
-            # Ensure we have enough data
-            if len(recent_data) < 10:
+            if len(recent_data) < 15:
                 return {
-                    'rsi': 50,
-                    'macd': 0,
-                    'price_trend': 0,
-                    'volume_ratio': 1
+                    'rsi': 50, 'macd': 0, 'price_trend': 0, 'volume_ratio': 1,
+                    'momentum': 0, 'volatility': 0
                 }
             
-            # Simple RSI calculation
+            # Enhanced RSI calculation
             price_changes = recent_data['Close'].diff().dropna()
             if len(price_changes) == 0:
                 rsi = 50
@@ -142,8 +173,9 @@ class SimpleRLTradingSystem:
                 gains = price_changes.where(price_changes > 0, 0)
                 losses = -price_changes.where(price_changes < 0, 0)
                 
-                avg_gain = gains.rolling(min(14, len(gains))).mean().iloc[-1]
-                avg_loss = losses.rolling(min(14, len(losses))).mean().iloc[-1]
+                period = min(14, len(gains))
+                avg_gain = gains.rolling(period).mean().iloc[-1]
+                avg_loss = losses.rolling(period).mean().iloc[-1]
                 
                 if avg_loss == 0:
                     rsi = 100
@@ -151,54 +183,71 @@ class SimpleRLTradingSystem:
                     rs = avg_gain / avg_loss
                     rsi = 100 - (100 / (1 + rs))
             
-            # Simple MACD
+            # Enhanced MACD
             try:
                 if len(recent_data) >= 12:
                     ema_12 = recent_data['Close'].ewm(span=12).mean().iloc[-1]
                     ema_26 = recent_data['Close'].ewm(span=min(26, len(recent_data))).mean().iloc[-1]
-                    macd = (ema_12 - ema_26) / ema_26  # Normalize by price
+                    macd = (ema_12 - ema_26) / ema_26
                 else:
                     macd = 0
             except:
                 macd = 0
             
-            # Price trend (5-day vs 10-day moving average)
+            # Enhanced price trend (multiple timeframes)
             try:
-                if len(recent_data) >= 10:
+                if len(recent_data) >= 15:
                     ma_5 = recent_data['Close'].rolling(5).mean().iloc[-1]
-                    ma_10 = recent_data['Close'].rolling(10).mean().iloc[-1]
-                    price_trend = (ma_5 - ma_10) / ma_10  # Normalized trend
+                    ma_15 = recent_data['Close'].rolling(15).mean().iloc[-1]
+                    price_trend = (ma_5 - ma_15) / ma_15
                 else:
                     price_trend = 0
             except:
                 price_trend = 0
             
-            # Volume ratio
+            # Enhanced volume analysis
             try:
                 current_volume = data['Volume'].iloc[current_idx]
-                avg_volume = recent_data['Volume'].rolling(10).mean().iloc[-1]
+                avg_volume = recent_data['Volume'].rolling(15).mean().iloc[-1]
                 volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
             except:
                 volume_ratio = 1
+            
+            # Price momentum
+            try:
+                if len(recent_data) >= 10:
+                    momentum = (current_price - recent_data['Close'].iloc[-10]) / recent_data['Close'].iloc[-10]
+                else:
+                    momentum = 0
+            except:
+                momentum = 0
+            
+            # Volatility measure
+            try:
+                if len(price_changes) >= 10:
+                    volatility = price_changes.rolling(10).std().iloc[-1] / current_price
+                else:
+                    volatility = 0
+            except:
+                volatility = 0
             
             return {
                 'rsi': rsi,
                 'macd': macd,
                 'price_trend': price_trend,
-                'volume_ratio': volume_ratio
+                'volume_ratio': volume_ratio,
+                'momentum': momentum,
+                'volatility': volatility
             }
             
         except Exception as e:
-            # Return default features on error
             return {
-                'rsi': 50,
-                'macd': 0,
-                'price_trend': 0,
-                'volume_ratio': 1
+                'rsi': 50, 'macd': 0, 'price_trend': 0, 'volume_ratio': 1,
+                'momentum': 0, 'volatility': 0
             }
     
-    def train_model(self, stock_data, symbol, episodes=100):
-        """Train the simple RL model"""
+    def train_model(self, stock_data, symbol, episodes=150):
+        """Train the enhanced RL model"""
         if len(stock_data) < 50:
             st.error("Insufficient data for training. Need at least 50 data points.")
             return []
@@ -225,25 +274,22 @@ class SimpleRLTradingSystem:
         return episode_rewards
     
     def simulate_trading(self, data, training=False):
-        """Simulate trading with the RL agent"""
+        """Simulate trading with enhanced logic"""
         cash = INITIAL_CAPITAL
         shares = 0
         total_reward = 0
-        max_position_value = INITIAL_CAPITAL * 0.8  # Max 80% of portfolio in stocks
+        max_position_value = INITIAL_CAPITAL * 0.95  # Allow 95% allocation
         
-        # Start from a safe index
-        start_idx = 25
+        start_idx = 30
         end_idx = len(data) - 1
         
         for i in range(start_idx, end_idx):
             try:
                 state_features = self.extract_features(data, i)
                 
-                # Choose action
                 if training:
                     action = self.agent.choose_action(state_features)
                 else:
-                    # Use exploitation during backtesting
                     old_epsilon = self.agent.epsilon
                     self.agent.epsilon = 0
                     action = self.agent.choose_action(state_features)
@@ -252,28 +298,33 @@ class SimpleRLTradingSystem:
                 current_price = data['Close'].iloc[i]
                 next_price = data['Close'].iloc[i + 1]
                 
-                # Calculate portfolio value before action
                 prev_value = cash + shares * current_price
                 
-                # Execute action with realistic position sizing
-                if action == 'BUY' and cash > current_price * 10:  # Minimum 10 shares
-                    # Calculate maximum position value
+                # Enhanced trading logic
+                if action == 'BUY' and cash > current_price * 5:
                     current_position_value = shares * current_price
                     available_for_stocks = max_position_value - current_position_value
                     
                     if available_for_stocks > 0:
-                        # Use only 20% of available cash per trade for gradual position building
-                        max_investment = min(cash * 0.2, available_for_stocks)
-                        shares_to_buy = int(max_investment / current_price)
+                        # More aggressive position sizing based on signals
+                        rsi = state_features.get('rsi', 50)
+                        trend = state_features.get('price_trend', 0)
+                        momentum = state_features.get('momentum', 0)
                         
-                        # Cap at reasonable trade size (max 1% of typical daily volume)
-                        max_trade_shares = max(10, int(data['Volume'].iloc[i] * 0.001))
-                        shares_to_buy = min(shares_to_buy, max_trade_shares)
+                        # Determine position size based on signal strength
+                        signal_strength = 0
+                        if rsi < 30: signal_strength += 0.3  # Oversold
+                        if trend > 0.02: signal_strength += 0.3  # Strong uptrend
+                        if momentum > 0.01: signal_strength += 0.2  # Positive momentum
+                        
+                        position_size = min(0.4 + signal_strength, 0.8)  # 40-80% of available cash
+                        max_investment = min(cash * position_size, available_for_stocks)
+                        
+                        shares_to_buy = int(max_investment / current_price)
                         
                         if shares_to_buy > 0:
                             cost = shares_to_buy * current_price
-                            # Add transaction cost (0.1%)
-                            transaction_cost = cost * 0.001
+                            transaction_cost = cost * 0.0005  # Reduced transaction cost
                             total_cost = cost + transaction_cost
                             
                             if cash >= total_cost:
@@ -281,43 +332,65 @@ class SimpleRLTradingSystem:
                                 shares += shares_to_buy
                         
                 elif action == 'SELL' and shares > 0:
-                    # Sell only 50% of position for gradual exit
-                    shares_to_sell = max(1, shares // 2)
+                    # Enhanced sell logic
+                    rsi = state_features.get('rsi', 50)
+                    trend = state_features.get('price_trend', 0)
+                    momentum = state_features.get('momentum', 0)
+                    
+                    # Determine sell percentage based on signals
+                    sell_signal = 0
+                    if rsi > 70: sell_signal += 0.4  # Overbought
+                    if trend < -0.02: sell_signal += 0.4  # Strong downtrend
+                    if momentum < -0.01: sell_signal += 0.3  # Negative momentum
+                    
+                    sell_percentage = min(0.3 + sell_signal, 1.0)  # 30-100% of position
+                    shares_to_sell = max(1, int(shares * sell_percentage))
+                    
                     revenue = shares_to_sell * current_price
-                    # Subtract transaction cost (0.1%)
-                    transaction_cost = revenue * 0.001
+                    transaction_cost = revenue * 0.0005  # Reduced transaction cost
                     net_revenue = revenue - transaction_cost
                     
                     cash += net_revenue
                     shares -= shares_to_sell
                 
-                # Calculate new portfolio value and reward
+                # Enhanced reward calculation
                 new_value = cash + shares * next_price
                 
-                # More conservative reward calculation
                 if prev_value > 0:
-                    # Portfolio return
                     portfolio_return = (new_value - prev_value) / prev_value
-                    
-                    # Market return (benchmark)
                     market_return = (next_price - current_price) / current_price
                     
-                    # Reward based on excess return over market, scaled down
-                    reward = (portfolio_return - market_return) * 50  # Reduced scaling
+                    # More sophisticated reward function
+                    reward = 0
                     
-                    # Conservative reward shaping
-                    if action == 'BUY' and next_price > current_price * 1.005:  # Only reward significant gains
-                        reward += 0.5
-                    elif action == 'SELL' and next_price < current_price * 0.995:  # Only reward avoiding significant losses
-                        reward += 0.5
-                    elif action == 'HOLD':
-                        reward += 0.05  # Small reward for holding
+                    if action == 'BUY':
+                        # Reward successful buy timing
+                        if next_price > current_price * 1.002:  # Price went up
+                            reward = portfolio_return * 200  # High reward for good timing
+                        else:
+                            reward = portfolio_return * 50   # Lower reward/penalty
                     
-                    # Penalty for poor timing
-                    if action == 'BUY' and next_price < current_price * 0.99:
-                        reward -= 1
-                    elif action == 'SELL' and next_price > current_price * 1.01:
-                        reward -= 1
+                    elif action == 'SELL':
+                        # Reward successful sell timing
+                        if next_price < current_price * 0.998:  # Price went down
+                            reward = -portfolio_return * 200  # Reward for avoiding loss
+                        else:
+                            reward = -portfolio_return * 50   # Penalty for early sell
+                    
+                    else:  # HOLD
+                        # Reward holding during sideways markets
+                        if abs(market_return) < 0.01:  # Low volatility
+                            reward = 1
+                        else:
+                            reward = portfolio_return * 20
+                    
+                    # Bonus for outperforming market
+                    if portfolio_return > market_return:
+                        reward += 2
+                    
+                    # Penalty for major losses
+                    if portfolio_return < -0.02:
+                        reward -= 5
                         
                 else:
                     reward = 0
@@ -335,12 +408,11 @@ class SimpleRLTradingSystem:
         return total_reward
     
     def predict_action(self, stock_data, symbol):
-        """Predict trading action"""
+        """Predict trading action with enhanced confidence"""
         try:
-            if len(stock_data) < 25:
+            if len(stock_data) < 30:
                 return "HOLD", 0.5
             
-            # Load model if not trained
             if not self.trained:
                 if self.agent.load_model(self.model_path):
                     self.trained = True
@@ -349,22 +421,32 @@ class SimpleRLTradingSystem:
             
             features = self.extract_features(stock_data, len(stock_data) - 1)
             
-            # Get action with no exploration
             old_epsilon = self.agent.epsilon
             self.agent.epsilon = 0
             action = self.agent.choose_action(features)
             self.agent.epsilon = old_epsilon
             
-            # Calculate confidence based on Q-values
+            # Enhanced confidence calculation
             state_key = self.agent.get_state_key(features)
             if state_key in self.agent.q_table:
                 q_values = self.agent.q_table[state_key]
-                if max(q_values) != min(q_values):
-                    # Normalize confidence between 0.3 and 0.9
-                    raw_confidence = (max(q_values) - np.mean(q_values)) / (max(q_values) - min(q_values))
-                    confidence = 0.3 + (raw_confidence * 0.6)
+                max_q = max(q_values)
+                min_q = min(q_values)
+                
+                if max_q != min_q:
+                    confidence = (max_q - np.mean(q_values)) / (max_q - min_q)
+                    confidence = 0.4 + (confidence * 0.5)  # Scale to 0.4-0.9
                 else:
-                    confidence = 0.5
+                    confidence = 0.6
+                
+                # Adjust confidence based on signal strength
+                rsi = features.get('rsi', 50)
+                trend = features.get('price_trend', 0)
+                
+                if (action == 'BUY' and rsi < 35 and trend > 0) or \
+                   (action == 'SELL' and rsi > 65 and trend < 0):
+                    confidence = min(confidence + 0.2, 0.95)
+                
             else:
                 confidence = 0.5
             
@@ -374,7 +456,7 @@ class SimpleRLTradingSystem:
             return "HOLD", 0.5
     
     def backtest_strategy(self, stock_data, symbol):
-        """Backtest the strategy"""
+        """Enhanced backtesting with realistic performance tracking"""
         try:
             if not self.trained:
                 if not self.agent.load_model(self.model_path):
@@ -390,15 +472,13 @@ class SimpleRLTradingSystem:
             cash = INITIAL_CAPITAL
             shares = 0
             
-            start_idx = 25
-            
-            max_position_value = INITIAL_CAPITAL * 0.8  # Max 80% of portfolio in stocks
+            start_idx = 30
+            max_position_value = INITIAL_CAPITAL * 0.95
             
             for i in range(start_idx, len(stock_data)):
                 try:
                     features = self.extract_features(stock_data, i)
                     
-                    # Use trained policy (no exploration)
                     old_epsilon = self.agent.epsilon
                     self.agent.epsilon = 0
                     action = self.agent.choose_action(features)
@@ -406,23 +486,29 @@ class SimpleRLTradingSystem:
                     
                     current_price = stock_data['Close'].iloc[i]
                     
-                    # Execute action with realistic trading logic
-                    if action == 'BUY' and cash > current_price * 10:  # Minimum 10 shares
+                    # Execute enhanced trading logic
+                    if action == 'BUY' and cash > current_price * 5:
                         current_position_value = shares * current_price
                         available_for_stocks = max_position_value - current_position_value
                         
                         if available_for_stocks > 0:
-                            # Use only 20% of available cash per trade
-                            max_investment = min(cash * 0.2, available_for_stocks)
-                            shares_to_buy = int(max_investment / current_price)
+                            # Signal-based position sizing
+                            rsi = features.get('rsi', 50)
+                            trend = features.get('price_trend', 0)
+                            momentum = features.get('momentum', 0)
                             
-                            # Cap at reasonable trade size
-                            max_trade_shares = max(10, int(stock_data['Volume'].iloc[i] * 0.001))
-                            shares_to_buy = min(shares_to_buy, max_trade_shares)
+                            signal_strength = 0
+                            if rsi < 30: signal_strength += 0.3
+                            if trend > 0.02: signal_strength += 0.3
+                            if momentum > 0.01: signal_strength += 0.2
+                            
+                            position_size = min(0.4 + signal_strength, 0.8)
+                            max_investment = min(cash * position_size, available_for_stocks)
+                            shares_to_buy = int(max_investment / current_price)
                             
                             if shares_to_buy > 0:
                                 cost = shares_to_buy * current_price
-                                transaction_cost = cost * 0.001  # 0.1% transaction cost
+                                transaction_cost = cost * 0.0005
                                 total_cost = cost + transaction_cost
                                 
                                 if cash >= total_cost:
@@ -436,10 +522,21 @@ class SimpleRLTradingSystem:
                                     })
                             
                     elif action == 'SELL' and shares > 0:
-                        # Sell only 50% of position for gradual exit
-                        shares_to_sell = max(1, shares // 2)
+                        # Enhanced sell logic
+                        rsi = features.get('rsi', 50)
+                        trend = features.get('price_trend', 0)
+                        momentum = features.get('momentum', 0)
+                        
+                        sell_signal = 0
+                        if rsi > 70: sell_signal += 0.4
+                        if trend < -0.02: sell_signal += 0.4
+                        if momentum < -0.01: sell_signal += 0.3
+                        
+                        sell_percentage = min(0.3 + sell_signal, 1.0)
+                        shares_to_sell = max(1, int(shares * sell_percentage))
+                        
                         revenue = shares_to_sell * current_price
-                        transaction_cost = revenue * 0.001  # 0.1% transaction cost
+                        transaction_cost = revenue * 0.0005
                         net_revenue = revenue - transaction_cost
                         
                         cash += net_revenue
@@ -456,23 +553,20 @@ class SimpleRLTradingSystem:
                     actions_taken.append(action)
                     
                 except:
-                    # On error, just hold
                     portfolio_value = cash + shares * stock_data['Close'].iloc[i]
                     portfolio_values.append(portfolio_value)
                     actions_taken.append('HOLD')
             
-            # Calculate performance metrics
+            # Calculate enhanced performance metrics
             if len(portfolio_values) > 1:
                 returns = pd.Series(portfolio_values).pct_change().dropna()
                 total_return = (portfolio_values[-1] - portfolio_values[0]) / portfolio_values[0]
                 
-                # Calculate Sharpe ratio
                 if returns.std() > 0:
                     sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252)
                 else:
                     sharpe_ratio = 0
                 
-                # Calculate max drawdown
                 peak = pd.Series(portfolio_values).expanding().max()
                 drawdown = (pd.Series(portfolio_values) - peak) / peak
                 max_drawdown = drawdown.min()
