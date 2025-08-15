@@ -608,11 +608,20 @@ def display_rl_analysis(stock_data, symbol):
     
     st.subheader("🤖 Reinforcement Learning Analysis")
     
+    # Check data quality
+    if len(stock_data) < 50:
+        st.error("⚠️ Insufficient data for RL analysis. Need at least 50 data points.")
+        return
+    
     # Check if model is trained
     if not simple_rl_system.trained:
         st.warning("⚠️ No trained model found. Please train the model first.")
-        if st.button("Train Model Now"):
-            train_rl_model()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Train Model Now"):
+                train_rl_model()
+        with col2:
+            st.info("Training may take 1-2 minutes")
         return
     
     # Get RL prediction
@@ -763,43 +772,58 @@ def train_rl_model():
     
     symbol = st.session_state.selected_stock
     exchange = st.session_state.exchange
-    period = "2y"  # Use longer period for training
     
-    st.info("🤖 Training RL model... This may take a few minutes.")
+    st.info("🤖 Training RL model... This may take 1-2 minutes.")
     
-    # Fetch training data
-    with st.spinner("Fetching training data..."):
-        training_data = stock_fetcher.fetch_stock_data(symbol, period, exchange)
+    # Try different periods to get enough data
+    periods = ["2y", "1y", "6mo"]
+    training_data = None
     
-    if training_data is None or len(training_data) < 100:
-        st.error("Insufficient data for training. Please try a different stock or period.")
+    for period in periods:
+        with st.spinner(f"Fetching {period} training data..."):
+            training_data = stock_fetcher.fetch_stock_data(symbol, period, exchange)
+        
+        if training_data is not None and len(training_data) >= 50:
+            st.success(f"✅ Found {len(training_data)} data points for training")
+            break
+    
+    if training_data is None or len(training_data) < 50:
+        st.error("❌ Insufficient data for training. Please try a different stock.")
         return
     
     # Train model
     try:
         with st.spinner("Training model..."):
-            episode_rewards = simple_rl_system.train_model(training_data, symbol, episodes=50)
+            episode_rewards = simple_rl_system.train_model(training_data, symbol, episodes=30)
         
-        st.success("✅ Model trained successfully!")
-        
-        # Display training progress
         if episode_rewards:
+            st.success("✅ Model trained successfully!")
+            
+            # Display training progress
             fig_training = go.Figure()
             fig_training.add_trace(go.Scatter(
                 y=episode_rewards,
                 mode='lines',
-                name='Episode Rewards'
+                name='Episode Rewards',
+                line=dict(color='blue')
             ))
             fig_training.update_layout(
                 title="Training Progress",
                 xaxis_title="Episode",
-                yaxis_title="Reward",
-                height=300
+                yaxis_title="Cumulative Reward",
+                height=300,
+                showlegend=False
             )
             st.plotly_chart(fig_training, use_container_width=True)
+            
+            st.info("🔄 Refreshing page to show RL predictions...")
+            st.rerun()
+        else:
+            st.error("Training completed but no rewards recorded")
         
     except Exception as e:
-        st.error(f"Error during training: {str(e)}")
+        st.error(f"❌ Error during training: {str(e)}")
+        st.info("Try selecting a different stock or check your data connection.")
 
 if __name__ == "__main__":
     # Initialize session state
