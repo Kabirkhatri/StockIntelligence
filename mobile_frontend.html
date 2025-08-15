@@ -1,0 +1,837 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Trading Mobile App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .mobile-container {
+            width: 100%;
+            max-width: 400px;
+            min-height: 600px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 15px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab:first-child {
+            border-radius: 10px 0 0 10px;
+        }
+
+        .tab:last-child {
+            border-radius: 0 10px 10px 0;
+        }
+
+        .profile-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .profile-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .profile-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 24px;
+            margin-right: 15px;
+        }
+
+        .portfolio-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .stock-symbol {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        .stock-details {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .bottom-nav {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e1e5e9;
+            display: flex;
+            padding: 15px 0;
+        }
+
+        .nav-item {
+            flex: 1;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .nav-item.active {
+            color: #667eea;
+        }
+
+        .nav-icon {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="mobile-container">
+        <!-- Login/Register Screen -->
+        <div id="auth-screen" class="screen active">
+            <div class="header">
+                <h1>📈 Stock Trader</h1>
+                <p>Your mobile trading companion</p>
+            </div>
+            <div class="content">
+                <div class="tabs">
+                    <button class="tab active" onclick="showAuthTab('login')">Login</button>
+                    <button class="tab" onclick="showAuthTab('register')">Register</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="login-form" class="auth-form">
+                    <div id="login-error" class="error" style="display: none;"></div>
+                    <div class="form-group">
+                        <label>Username or Email</label>
+                        <input type="text" id="login-username" placeholder="Enter username or email">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="login-password" placeholder="Enter password">
+                    </div>
+                    <button class="btn btn-primary" onclick="login()">Login</button>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-form" class="auth-form" style="display: none;">
+                    <div id="register-error" class="error" style="display: none;"></div>
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="register-fullname" placeholder="Enter full name">
+                    </div>
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="register-username" placeholder="Choose username">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="register-email" placeholder="Enter email">
+                    </div>
+                    <div class="form-group">
+                        <label>Phone (Optional)</label>
+                        <input type="tel" id="register-phone" placeholder="Enter phone number">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="register-password" placeholder="Create password">
+                    </div>
+                    <button class="btn btn-primary" onclick="register()">Register</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="dashboard-screen" class="screen">
+            <div class="header">
+                <h1>📊 Dashboard</h1>
+                <p>Welcome back, <span id="user-name"></span>!</p>
+            </div>
+            <div class="content" style="padding-bottom: 80px;">
+                <div class="profile-section">
+                    <div class="profile-info">
+                        <div class="profile-avatar" id="user-avatar">U</div>
+                        <div>
+                            <div style="font-weight: bold;" id="user-fullname">User Name</div>
+                            <div style="color: #666; font-size: 14px;" id="user-email">user@email.com</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom: 15px;">Your Portfolio</h3>
+                <div id="portfolio-container">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading portfolio...</p>
+                    </div>
+                </div>
+
+                <h3 style="margin: 20px 0 15px 0;">Popular Stocks</h3>
+                <div id="popular-stocks-container">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading stocks...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bottom-nav">
+                <div class="nav-item active" onclick="showScreen('dashboard')">
+                    <div class="nav-icon">🏠</div>
+                    <div>Home</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('portfolio')">
+                    <div class="nav-icon">💼</div>
+                    <div>Portfolio</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('profile')">
+                    <div class="nav-icon">👤</div>
+                    <div>Profile</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfolio Screen -->
+        <div id="portfolio-screen" class="screen">
+            <div class="header">
+                <h1>💼 Portfolio</h1>
+                <p>Manage your investments</p>
+            </div>
+            <div class="content" style="padding-bottom: 80px;">
+                <button class="btn btn-primary" onclick="showAddStockForm()">Add Stock</button>
+                
+                <div id="add-stock-form" style="display: none; margin-top: 20px;">
+                    <div id="add-stock-error" class="error" style="display: none;"></div>
+                    <div class="form-group">
+                        <label>Stock Symbol</label>
+                        <input type="text" id="stock-symbol" placeholder="e.g., RELIANCE">
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity</label>
+                        <input type="number" id="stock-quantity" placeholder="Number of shares">
+                    </div>
+                    <div class="form-group">
+                        <label>Purchase Price</label>
+                        <input type="number" step="0.01" id="stock-price" placeholder="Price per share">
+                    </div>
+                    <button class="btn btn-primary" onclick="addStock()">Add to Portfolio</button>
+                    <button class="btn btn-secondary" onclick="hideAddStockForm()">Cancel</button>
+                </div>
+
+                <div id="portfolio-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading portfolio...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('dashboard')">
+                    <div class="nav-icon">🏠</div>
+                    <div>Home</div>
+                </div>
+                <div class="nav-item active" onclick="showScreen('portfolio')">
+                    <div class="nav-icon">💼</div>
+                    <div>Portfolio</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('profile')">
+                    <div class="nav-icon">👤</div>
+                    <div>Profile</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Screen -->
+        <div id="profile-screen" class="screen">
+            <div class="header">
+                <h1>👤 Profile</h1>
+                <p>Manage your account</p>
+            </div>
+            <div class="content" style="padding-bottom: 80px;">
+                <div class="profile-section">
+                    <div class="profile-info">
+                        <div class="profile-avatar" id="profile-avatar">U</div>
+                        <div>
+                            <div style="font-weight: bold;" id="profile-fullname">User Name</div>
+                            <div style="color: #666; font-size: 14px;" id="profile-email">user@email.com</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="profile-error" class="error" style="display: none;"></div>
+                <div id="profile-success" class="success" style="display: none;"></div>
+
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="profile-fullname-input">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="profile-phone-input">
+                </div>
+
+                <button class="btn btn-primary" onclick="updateProfile()">Update Profile</button>
+                <button class="btn btn-secondary" onclick="logout()">Logout</button>
+            </div>
+            
+            <div class="bottom-nav">
+                <div class="nav-item" onclick="showScreen('dashboard')">
+                    <div class="nav-icon">🏠</div>
+                    <div>Home</div>
+                </div>
+                <div class="nav-item" onclick="showScreen('portfolio')">
+                    <div class="nav-icon">💼</div>
+                    <div>Portfolio</div>
+                </div>
+                <div class="nav-item active" onclick="showScreen('profile')">
+                    <div class="nav-icon">👤</div>
+                    <div>Profile</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://0.0.0.0:5000/api';
+        let currentUser = null;
+        let authToken = null;
+
+        // Check if user is logged in on page load
+        window.onload = function() {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                authToken = token;
+                loadUserProfile();
+            }
+        };
+
+        function showAuthTab(tab) {
+            const tabs = document.querySelectorAll('.tab');
+            const forms = document.querySelectorAll('.auth-form');
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            forms.forEach(f => f.style.display = 'none');
+            
+            if (tab === 'login') {
+                tabs[0].classList.add('active');
+                document.getElementById('login-form').style.display = 'block';
+            } else {
+                tabs[1].classList.add('active');
+                document.getElementById('register-form').style.display = 'block';
+            }
+        }
+
+        function showScreen(screenName) {
+            const screens = document.querySelectorAll('.screen');
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            screens.forEach(s => s.classList.remove('active'));
+            navItems.forEach(n => n.classList.remove('active'));
+            
+            document.getElementById(screenName + '-screen').classList.add('active');
+            
+            // Update nav
+            if (screenName === 'dashboard') {
+                navItems[0].classList.add('active');
+                loadDashboard();
+            } else if (screenName === 'portfolio') {
+                navItems[1].classList.add('active');
+                loadPortfolio();
+            } else if (screenName === 'profile') {
+                navItems[2].classList.add('active');
+                loadProfileData();
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            if (!username || !password) {
+                showError(errorDiv, 'Please fill in all fields');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('authToken', authToken);
+                    showScreen('dashboard');
+                } else {
+                    showError(errorDiv, data.error);
+                }
+            } catch (error) {
+                showError(errorDiv, 'Network error. Please try again.');
+            }
+        }
+
+        async function register() {
+            const fullName = document.getElementById('register-fullname').value;
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const phone = document.getElementById('register-phone').value;
+            const password = document.getElementById('register-password').value;
+            const errorDiv = document.getElementById('register-error');
+            
+            if (!fullName || !username || !email || !password) {
+                showError(errorDiv, 'Please fill in all required fields');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        username,
+                        email,
+                        phone,
+                        password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('authToken', authToken);
+                    showScreen('dashboard');
+                } else {
+                    showError(errorDiv, data.error);
+                }
+            } catch (error) {
+                showError(errorDiv, 'Network error. Please try again.');
+            }
+        }
+
+        async function loadUserProfile() {
+            try {
+                const response = await fetch(`${API_BASE}/profile`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    showScreen('dashboard');
+                } else {
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                }
+            } catch (error) {
+                localStorage.removeItem('authToken');
+                authToken = null;
+            }
+        }
+
+        async function loadDashboard() {
+            if (!currentUser) return;
+            
+            document.getElementById('user-name').textContent = currentUser.full_name;
+            document.getElementById('user-fullname').textContent = currentUser.full_name;
+            document.getElementById('user-email').textContent = currentUser.email;
+            document.getElementById('user-avatar').textContent = currentUser.full_name.charAt(0);
+            
+            // Load portfolio summary
+            await loadPortfolioSummary();
+            
+            // Load popular stocks
+            await loadPopularStocks();
+        }
+
+        async function loadPortfolioSummary() {
+            try {
+                const response = await fetch(`${API_BASE}/portfolio`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const container = document.getElementById('portfolio-container');
+                    
+                    if (data.portfolio.length === 0) {
+                        container.innerHTML = '<p>No stocks in portfolio yet. Add some stocks to get started!</p>';
+                    } else {
+                        container.innerHTML = data.portfolio.slice(0, 3).map(stock => `
+                            <div class="portfolio-item">
+                                <div class="stock-symbol">${stock.stock_symbol}</div>
+                                <div class="stock-details">
+                                    Qty: ${stock.quantity} | Price: ₹${stock.purchase_price.toFixed(2)}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                document.getElementById('portfolio-container').innerHTML = '<p>Error loading portfolio</p>';
+            }
+        }
+
+        async function loadPopularStocks() {
+            try {
+                const response = await fetch(`${API_BASE}/stocks/popular`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const container = document.getElementById('popular-stocks-container');
+                    
+                    container.innerHTML = data.stocks.slice(0, 5).map(stock => `
+                        <div class="portfolio-item">
+                            <div class="stock-symbol">${stock}</div>
+                            <div class="stock-details">Popular Indian stock</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                document.getElementById('popular-stocks-container').innerHTML = '<p>Error loading stocks</p>';
+            }
+        }
+
+        async function loadPortfolio() {
+            try {
+                const response = await fetch(`${API_BASE}/portfolio`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const container = document.getElementById('portfolio-list');
+                    
+                    if (data.portfolio.length === 0) {
+                        container.innerHTML = '<p>No stocks in portfolio yet.</p>';
+                    } else {
+                        container.innerHTML = data.portfolio.map(stock => `
+                            <div class="portfolio-item">
+                                <div class="stock-symbol">${stock.stock_symbol}</div>
+                                <div class="stock-details">
+                                    Quantity: ${stock.quantity}<br>
+                                    Purchase Price: ₹${stock.purchase_price.toFixed(2)}<br>
+                                    Date: ${new Date(stock.purchase_date).toLocaleDateString()}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                document.getElementById('portfolio-list').innerHTML = '<p>Error loading portfolio</p>';
+            }
+        }
+
+        async function loadProfileData() {
+            if (!currentUser) return;
+            
+            document.getElementById('profile-avatar').textContent = currentUser.full_name.charAt(0);
+            document.getElementById('profile-fullname').textContent = currentUser.full_name;
+            document.getElementById('profile-email').textContent = currentUser.email;
+            
+            document.getElementById('profile-fullname-input').value = currentUser.full_name || '';
+            document.getElementById('profile-phone-input').value = currentUser.phone || '';
+        }
+
+        function showAddStockForm() {
+            document.getElementById('add-stock-form').style.display = 'block';
+        }
+
+        function hideAddStockForm() {
+            document.getElementById('add-stock-form').style.display = 'none';
+            document.getElementById('stock-symbol').value = '';
+            document.getElementById('stock-quantity').value = '';
+            document.getElementById('stock-price').value = '';
+        }
+
+        async function addStock() {
+            const symbol = document.getElementById('stock-symbol').value.toUpperCase();
+            const quantity = parseInt(document.getElementById('stock-quantity').value);
+            const price = parseFloat(document.getElementById('stock-price').value);
+            const errorDiv = document.getElementById('add-stock-error');
+            
+            if (!symbol || !quantity || !price) {
+                showError(errorDiv, 'Please fill in all fields');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/portfolio`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        stock_symbol: symbol,
+                        quantity: quantity,
+                        purchase_price: price
+                    })
+                });
+                
+                if (response.ok) {
+                    hideAddStockForm();
+                    loadPortfolio();
+                } else {
+                    const data = await response.json();
+                    showError(errorDiv, data.error);
+                }
+            } catch (error) {
+                showError(errorDiv, 'Network error. Please try again.');
+            }
+        }
+
+        async function updateProfile() {
+            const fullName = document.getElementById('profile-fullname-input').value;
+            const phone = document.getElementById('profile-phone-input').value;
+            const errorDiv = document.getElementById('profile-error');
+            const successDiv = document.getElementById('profile-success');
+            
+            try {
+                const response = await fetch(`${API_BASE}/profile`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        phone: phone
+                    })
+                });
+                
+                if (response.ok) {
+                    currentUser.full_name = fullName;
+                    currentUser.phone = phone;
+                    showSuccess(successDiv, 'Profile updated successfully!');
+                    setTimeout(() => successDiv.style.display = 'none', 3000);
+                } else {
+                    const data = await response.json();
+                    showError(errorDiv, data.error);
+                }
+            } catch (error) {
+                showError(errorDiv, 'Network error. Please try again.');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            showScreen('auth');
+            document.getElementById('auth-screen').classList.add('active');
+            document.getElementById('dashboard-screen').classList.remove('active');
+            document.getElementById('portfolio-screen').classList.remove('active');
+            document.getElementById('profile-screen').classList.remove('active');
+        }
+
+        function showError(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+            setTimeout(() => element.style.display = 'none', 5000);
+        }
+
+        function showSuccess(element, message) {
+            element.textContent = message;
+            element.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
