@@ -27,15 +27,15 @@ class SimpleTradingAgent:
             # Discretize continuous features for Q-table
             rsi = state_features.get('rsi', 50)
             macd = state_features.get('macd', 0)
-            price_above_ma = state_features.get('price_above_ma', True)
-            volume_spike = state_features.get('volume_spike', False)
+            price_trend = state_features.get('price_trend', 0)
+            volume_ratio = state_features.get('volume_ratio', 1)
             
             rsi_bucket = min(max(int(rsi / 20), 0), 4)  # 0-4 buckets
-            macd_bucket = 1 if macd > 0 else 0
-            ma_bucket = 1 if price_above_ma else 0
-            vol_bucket = 1 if volume_spike else 0
+            macd_bucket = 2 if macd > 0.01 else 1 if macd > -0.01 else 0
+            trend_bucket = 2 if price_trend > 0.02 else 1 if price_trend > -0.02 else 0
+            vol_bucket = min(max(int(volume_ratio), 0), 3)  # 0-3 buckets
             
-            return f"{rsi_bucket}_{macd_bucket}_{ma_bucket}_{vol_bucket}"
+            return f"{rsi_bucket}_{macd_bucket}_{trend_bucket}_{vol_bucket}"
         except:
             return "default_state"
     
@@ -118,8 +118,8 @@ class SimpleRLTradingSystem:
                 return {
                     'rsi': 50,
                     'macd': 0,
-                    'price_above_ma': True,
-                    'volume_spike': False
+                    'price_trend': 0,
+                    'volume_ratio': 1
                 }
             
             current_price = data['Close'].iloc[current_idx]
@@ -130,8 +130,8 @@ class SimpleRLTradingSystem:
                 return {
                     'rsi': 50,
                     'macd': 0,
-                    'price_above_ma': True,
-                    'volume_spike': False
+                    'price_trend': 0,
+                    'volume_ratio': 1
                 }
             
             # Simple RSI calculation
@@ -142,8 +142,8 @@ class SimpleRLTradingSystem:
                 gains = price_changes.where(price_changes > 0, 0)
                 losses = -price_changes.where(price_changes < 0, 0)
                 
-                avg_gain = gains.mean()
-                avg_loss = losses.mean()
+                avg_gain = gains.rolling(min(14, len(gains))).mean().iloc[-1]
+                avg_loss = losses.rolling(min(14, len(losses))).mean().iloc[-1]
                 
                 if avg_loss == 0:
                     rsi = 100
@@ -156,33 +156,36 @@ class SimpleRLTradingSystem:
                 if len(recent_data) >= 12:
                     ema_12 = recent_data['Close'].ewm(span=12).mean().iloc[-1]
                     ema_26 = recent_data['Close'].ewm(span=min(26, len(recent_data))).mean().iloc[-1]
-                    macd = ema_12 - ema_26
+                    macd = (ema_12 - ema_26) / ema_26  # Normalize by price
                 else:
                     macd = 0
             except:
                 macd = 0
             
-            # Moving average
+            # Price trend (5-day vs 10-day moving average)
             try:
-                ma_period = min(20, len(recent_data))
-                ma_20 = recent_data['Close'].rolling(ma_period).mean().iloc[-1]
-                price_above_ma = current_price > ma_20
+                if len(recent_data) >= 10:
+                    ma_5 = recent_data['Close'].rolling(5).mean().iloc[-1]
+                    ma_10 = recent_data['Close'].rolling(10).mean().iloc[-1]
+                    price_trend = (ma_5 - ma_10) / ma_10  # Normalized trend
+                else:
+                    price_trend = 0
             except:
-                price_above_ma = True
+                price_trend = 0
             
-            # Volume spike detection
+            # Volume ratio
             try:
                 current_volume = data['Volume'].iloc[current_idx]
-                avg_volume = recent_data['Volume'].mean()
-                volume_spike = current_volume > (avg_volume * 1.5)
+                avg_volume = recent_data['Volume'].rolling(10).mean().iloc[-1]
+                volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
             except:
-                volume_spike = False
+                volume_ratio = 1
             
             return {
                 'rsi': rsi,
                 'macd': macd,
-                'price_above_ma': price_above_ma,
-                'volume_spike': volume_spike
+                'price_trend': price_trend,
+                'volume_ratio': volume_ratio
             }
             
         except Exception as e:
@@ -190,11 +193,11 @@ class SimpleRLTradingSystem:
             return {
                 'rsi': 50,
                 'macd': 0,
-                'price_above_ma': True,
-                'volume_spike': False
+                'price_trend': 0,
+                'volume_ratio': 1
             }
     
-    def train_model(self, stock_data, symbol, episodes=50):
+    def train_model(self, stock_data, symbol, episodes=100):
         """Train the simple RL model"""
         if len(stock_data) < 50:
             st.error("Insufficient data for training. Need at least 50 data points.")
@@ -251,32 +254,53 @@ class SimpleRLTradingSystem:
                 # Calculate portfolio value before action
                 prev_value = cash + shares * current_price
                 
-                # Execute action
-                if action == 'BUY' and cash > current_price * 10:  # Minimum 10 shares
-                    shares_to_buy = min(int(cash * 0.8 / current_price), 100)  # Limit position size
+                # Execute action with better logic
+                if action == 'BUY' and cash > current_price * 100:  # Buy 100 shares minimum
+                    # Buy more aggressively when signals are positive
+                    max_shares = int(cash * 0.95 / current_price)  # Use 95% of available cash
+                    shares_to_buy = min(max_shares, 500)  # Cap at 500 shares per trade
+                    
                     if shares_to_buy > 0:
-                        cash -= shares_to_buy * current_price
+                        cost = shares_to_buy * current_price
+                        cash -= cost
                         shares += shares_to_buy
                         
                 elif action == 'SELL' and shares > 0:
-                    cash += shares * current_price
+                    # Sell all shares
+                    revenue = shares * current_price
+                    cash += revenue
                     shares = 0
                 
                 # Calculate new portfolio value and reward
                 new_value = cash + shares * next_price
                 
+                # Better reward calculation
                 if prev_value > 0:
-                    reward = (new_value - prev_value) / prev_value
+                    # Portfolio return
+                    portfolio_return = (new_value - prev_value) / prev_value
+                    
+                    # Market return (benchmark)
+                    market_return = (next_price - current_price) / current_price
+                    
+                    # Reward based on excess return over market
+                    reward = (portfolio_return - market_return) * 100
+                    
+                    # Additional reward shaping
+                    if action == 'BUY' and next_price > current_price:
+                        reward += 1  # Bonus for good buy timing
+                    elif action == 'SELL' and next_price < current_price:
+                        reward += 1  # Bonus for good sell timing
+                    elif action == 'HOLD':
+                        reward += 0.1  # Small reward for holding
+                    
+                    # Penalty for poor timing
+                    if action == 'BUY' and next_price < current_price * 0.98:
+                        reward -= 2  # Penalty for buying before significant drop
+                    elif action == 'SELL' and next_price > current_price * 1.02:
+                        reward -= 2  # Penalty for selling before significant rise
+                        
                 else:
                     reward = 0
-                
-                # Reward shaping
-                if action == 'BUY' and next_price > current_price:
-                    reward += 0.01  # Bonus for good buy
-                elif action == 'SELL' and next_price < current_price:
-                    reward += 0.01  # Bonus for good sell
-                elif action == 'HOLD':
-                    reward += 0.001  # Small reward for holding
                 
                 total_reward += reward
                 
@@ -316,7 +340,9 @@ class SimpleRLTradingSystem:
             if state_key in self.agent.q_table:
                 q_values = self.agent.q_table[state_key]
                 if max(q_values) != min(q_values):
-                    confidence = (max(q_values) - np.mean(q_values)) / (max(q_values) - min(q_values))
+                    # Normalize confidence between 0.3 and 0.9
+                    raw_confidence = (max(q_values) - np.mean(q_values)) / (max(q_values) - min(q_values))
+                    confidence = 0.3 + (raw_confidence * 0.6)
                 else:
                     confidence = 0.5
             else:
@@ -358,9 +384,11 @@ class SimpleRLTradingSystem:
                     
                     current_price = stock_data['Close'].iloc[i]
                     
-                    # Execute action
-                    if action == 'BUY' and cash > current_price * 10:
-                        shares_to_buy = min(int(cash * 0.8 / current_price), 100)
+                    # Execute action with improved logic
+                    if action == 'BUY' and cash > current_price * 100:  # Minimum 100 shares
+                        max_shares = int(cash * 0.95 / current_price)  # Use 95% of cash
+                        shares_to_buy = min(max_shares, 500)  # Cap at 500 shares
+                        
                         if shares_to_buy > 0:
                             cost = shares_to_buy * current_price
                             cash -= cost
@@ -369,7 +397,7 @@ class SimpleRLTradingSystem:
                                 'action': 'BUY',
                                 'shares': shares_to_buy,
                                 'price': current_price,
-                                'date': stock_data.index[i]
+                                'date': stock_data.index[i] if hasattr(stock_data.index[i], 'strftime') else i
                             })
                             
                     elif action == 'SELL' and shares > 0:
@@ -379,7 +407,7 @@ class SimpleRLTradingSystem:
                             'action': 'SELL',
                             'shares': shares,
                             'price': current_price,
-                            'date': stock_data.index[i]
+                            'date': stock_data.index[i] if hasattr(stock_data.index[i], 'strftime') else i
                         })
                         shares = 0
                     
