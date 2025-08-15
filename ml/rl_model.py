@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow import keras
+layers = keras.layers
 import streamlit as st
 from collections import deque
 import random

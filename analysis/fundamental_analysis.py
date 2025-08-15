@@ -7,8 +7,8 @@ import streamlit as st
 from data.stock_data import stock_fetcher
 
 class FundamentalAnalyzer:
-    def __init__(self):
-        self.benchmark_metrics = {
+    def __init__(_self):
+        _self.benchmark_metrics = {
             'pe_ratio': {'excellent': 15, 'good': 25, 'average': 35},
             'price_to_book': {'excellent': 1.5, 'good': 3, 'average': 5},
             'debt_to_equity': {'excellent': 0.3, 'good': 0.6, 'average': 1.0},

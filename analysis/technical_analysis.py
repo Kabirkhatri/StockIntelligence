@@ -3,7 +3,7 @@ Technical analysis indicators and calculations
 """
 import pandas as pd
 import numpy as np
-# import talib  # Commented out due to installation issues
+import talib  # Commented out due to installation issues
 import streamlit as st
 from config.settings import (
     RSI_PERIOD, MACD_FAST, MACD_SLOW, MACD_SIGNAL,
