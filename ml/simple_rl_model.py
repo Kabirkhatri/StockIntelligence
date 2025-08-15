@@ -229,6 +229,7 @@ class SimpleRLTradingSystem:
         cash = INITIAL_CAPITAL
         shares = 0
         total_reward = 0
+        max_position_value = INITIAL_CAPITAL * 0.8  # Max 80% of portfolio in stocks
         
         # Start from a safe index
         start_idx = 25
@@ -254,27 +255,46 @@ class SimpleRLTradingSystem:
                 # Calculate portfolio value before action
                 prev_value = cash + shares * current_price
                 
-                # Execute action with better logic
-                if action == 'BUY' and cash > current_price * 100:  # Buy 100 shares minimum
-                    # Buy more aggressively when signals are positive
-                    max_shares = int(cash * 0.95 / current_price)  # Use 95% of available cash
-                    shares_to_buy = min(max_shares, 500)  # Cap at 500 shares per trade
+                # Execute action with realistic position sizing
+                if action == 'BUY' and cash > current_price * 10:  # Minimum 10 shares
+                    # Calculate maximum position value
+                    current_position_value = shares * current_price
+                    available_for_stocks = max_position_value - current_position_value
                     
-                    if shares_to_buy > 0:
-                        cost = shares_to_buy * current_price
-                        cash -= cost
-                        shares += shares_to_buy
+                    if available_for_stocks > 0:
+                        # Use only 20% of available cash per trade for gradual position building
+                        max_investment = min(cash * 0.2, available_for_stocks)
+                        shares_to_buy = int(max_investment / current_price)
+                        
+                        # Cap at reasonable trade size (max 1% of typical daily volume)
+                        max_trade_shares = max(10, int(data['Volume'].iloc[i] * 0.001))
+                        shares_to_buy = min(shares_to_buy, max_trade_shares)
+                        
+                        if shares_to_buy > 0:
+                            cost = shares_to_buy * current_price
+                            # Add transaction cost (0.1%)
+                            transaction_cost = cost * 0.001
+                            total_cost = cost + transaction_cost
+                            
+                            if cash >= total_cost:
+                                cash -= total_cost
+                                shares += shares_to_buy
                         
                 elif action == 'SELL' and shares > 0:
-                    # Sell all shares
-                    revenue = shares * current_price
-                    cash += revenue
-                    shares = 0
+                    # Sell only 50% of position for gradual exit
+                    shares_to_sell = max(1, shares // 2)
+                    revenue = shares_to_sell * current_price
+                    # Subtract transaction cost (0.1%)
+                    transaction_cost = revenue * 0.001
+                    net_revenue = revenue - transaction_cost
+                    
+                    cash += net_revenue
+                    shares -= shares_to_sell
                 
                 # Calculate new portfolio value and reward
                 new_value = cash + shares * next_price
                 
-                # Better reward calculation
+                # More conservative reward calculation
                 if prev_value > 0:
                     # Portfolio return
                     portfolio_return = (new_value - prev_value) / prev_value
@@ -282,22 +302,22 @@ class SimpleRLTradingSystem:
                     # Market return (benchmark)
                     market_return = (next_price - current_price) / current_price
                     
-                    # Reward based on excess return over market
-                    reward = (portfolio_return - market_return) * 100
+                    # Reward based on excess return over market, scaled down
+                    reward = (portfolio_return - market_return) * 50  # Reduced scaling
                     
-                    # Additional reward shaping
-                    if action == 'BUY' and next_price > current_price:
-                        reward += 1  # Bonus for good buy timing
-                    elif action == 'SELL' and next_price < current_price:
-                        reward += 1  # Bonus for good sell timing
+                    # Conservative reward shaping
+                    if action == 'BUY' and next_price > current_price * 1.005:  # Only reward significant gains
+                        reward += 0.5
+                    elif action == 'SELL' and next_price < current_price * 0.995:  # Only reward avoiding significant losses
+                        reward += 0.5
                     elif action == 'HOLD':
-                        reward += 0.1  # Small reward for holding
+                        reward += 0.05  # Small reward for holding
                     
                     # Penalty for poor timing
-                    if action == 'BUY' and next_price < current_price * 0.98:
-                        reward -= 2  # Penalty for buying before significant drop
-                    elif action == 'SELL' and next_price > current_price * 1.02:
-                        reward -= 2  # Penalty for selling before significant rise
+                    if action == 'BUY' and next_price < current_price * 0.99:
+                        reward -= 1
+                    elif action == 'SELL' and next_price > current_price * 1.01:
+                        reward -= 1
                         
                 else:
                     reward = 0
@@ -372,6 +392,8 @@ class SimpleRLTradingSystem:
             
             start_idx = 25
             
+            max_position_value = INITIAL_CAPITAL * 0.8  # Max 80% of portfolio in stocks
+            
             for i in range(start_idx, len(stock_data)):
                 try:
                     features = self.extract_features(stock_data, i)
@@ -384,32 +406,50 @@ class SimpleRLTradingSystem:
                     
                     current_price = stock_data['Close'].iloc[i]
                     
-                    # Execute action with improved logic
-                    if action == 'BUY' and cash > current_price * 100:  # Minimum 100 shares
-                        max_shares = int(cash * 0.95 / current_price)  # Use 95% of cash
-                        shares_to_buy = min(max_shares, 500)  # Cap at 500 shares
+                    # Execute action with realistic trading logic
+                    if action == 'BUY' and cash > current_price * 10:  # Minimum 10 shares
+                        current_position_value = shares * current_price
+                        available_for_stocks = max_position_value - current_position_value
                         
-                        if shares_to_buy > 0:
-                            cost = shares_to_buy * current_price
-                            cash -= cost
-                            shares += shares_to_buy
-                            trades.append({
-                                'action': 'BUY',
-                                'shares': shares_to_buy,
-                                'price': current_price,
-                                'date': stock_data.index[i] if hasattr(stock_data.index[i], 'strftime') else i
-                            })
+                        if available_for_stocks > 0:
+                            # Use only 20% of available cash per trade
+                            max_investment = min(cash * 0.2, available_for_stocks)
+                            shares_to_buy = int(max_investment / current_price)
+                            
+                            # Cap at reasonable trade size
+                            max_trade_shares = max(10, int(stock_data['Volume'].iloc[i] * 0.001))
+                            shares_to_buy = min(shares_to_buy, max_trade_shares)
+                            
+                            if shares_to_buy > 0:
+                                cost = shares_to_buy * current_price
+                                transaction_cost = cost * 0.001  # 0.1% transaction cost
+                                total_cost = cost + transaction_cost
+                                
+                                if cash >= total_cost:
+                                    cash -= total_cost
+                                    shares += shares_to_buy
+                                    trades.append({
+                                        'action': 'BUY',
+                                        'shares': shares_to_buy,
+                                        'price': current_price,
+                                        'date': stock_data.index[i] if hasattr(stock_data.index[i], 'strftime') else i
+                                    })
                             
                     elif action == 'SELL' and shares > 0:
-                        revenue = shares * current_price
-                        cash += revenue
+                        # Sell only 50% of position for gradual exit
+                        shares_to_sell = max(1, shares // 2)
+                        revenue = shares_to_sell * current_price
+                        transaction_cost = revenue * 0.001  # 0.1% transaction cost
+                        net_revenue = revenue - transaction_cost
+                        
+                        cash += net_revenue
+                        shares -= shares_to_sell
                         trades.append({
                             'action': 'SELL',
-                            'shares': shares,
+                            'shares': shares_to_sell,
                             'price': current_price,
                             'date': stock_data.index[i] if hasattr(stock_data.index[i], 'strftime') else i
                         })
-                        shares = 0
                     
                     portfolio_value = cash + shares * current_price
                     portfolio_values.append(portfolio_value)
